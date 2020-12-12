@@ -1,54 +1,46 @@
 #!/bin/bash
 
-backupHomeDir="$HOME/"
-sourceDir="$HOME/source/"
-todayDate=$(date "+%F")
+HOM="/home/user"
+LBackupDate=$(ls $HOM | grep -E "^Backup-" | sort -n | tail -1 | sed "s/Backup-//")
+LBackup="$HOM/Backup-${LBackupDate}"
+Today=$(date +"%Y-%m-%d")
+NowTimes=$(date -d "$Today" +"%s")
+LBackupTimes=$(date -d "$LBackupDate" +"%s")
+Totaltime=$(echo "(${NowTimes} - ${LBackupTimes}) / 60 / 60 / 24" | bc)
+rep=$HOM/.backup-report
 
-dircreated=0
-backupPrefix="Backup-"
-backupReport="$HOME/backup-report"
-todaySec=$(date --date=$todayDate "+%s")
-lastbackupDir=$(ls $backupHomeDir -1 | grep -E "Backup-[0-9]{4}-[0-9]{2}-[0-9]{2}" | sort -3 -k2 | head -1)
-lastbackupSec=$(date --date=$(ls $backupHomeDir -1 | grep -Eo "Backup-[0-9]{4}-[0-9]{2}-[0-9]{2}" | sort -3 -k2 | head -1 | sed "s/^Backup-//") "+%s")
-
-let dateDiff=($todaySec\-$lastbackupSec)/60/60/24
-
-if [ "$dateDiff" -le 7 ]; then
-    echo "dateDiff less 7"
-    currentbackupDir=$backupHomeDir$lastbackupDir"/"
-else
-    echo "NOT dateDiff less 7"
-    mkdir $backupHomeDir$backupPrefix$todayDate
-    currentbackupDir=$backupHomeDir$backupPrefix$todayDate"/"
-    dircreated=1
-fi
-
-if [ "$dircreated" == "1" ]; then
-    echo "New backup. Date: "$todayDate". Directory: "$sourceDir". Files:" >> "$backupReport"
-    for file in $(ls $sourseDir -1)
+if [[ $Totaltime > 7 || -z "$LBackupDate" ]];
+then
+	mkdir "$HOM/Backup-${Today}"
+	for obj in $(ls $HOM/source);
     do
-        cp "$courseDir$file" "$currentbackupDir$file"
-        echo "$file" >> "$backupReport"
+	    cp "$HOM/source/$obj" "$HOM/Backup-$Today"
     done
+	flist=$(ls $HOM/source | sed "s/^/\t/")
+	echo -e "${Today}. Created:\n${flist}" >> $rep
 else
-    echo "Updating backup. Date: "$todayDate". Directory "$currentbackupDir". " >> "$backupReport"
-    
-    for file in $(ls sourceDor -1)
+	changes=""
+	for obj in $(ls $HOM/source);
     do
-        currentfile=$currentbackupDir$file
-        if [ -f $currentfile ]; then
-            source_size=$(stat $sourceDir$file -c%s)
-            actual_size=$(stat $currentfile -c%s)
-            if [ "$source_size" != "$actual_size" ]; then
-                mv $currentfile $currentfile"."$todayDate
-                cp $sourceDirfile $currentfile
-                echo "Found new version of "$file". Old version copied to "$file"."$todatDate"" >> $backupReport
-            fi
-        else
-            cp $sourceDir$file $currentfile
-            echo "New file "$file" copied" >> $backupReport
+		if [[ -f "$LBackup/$obj" ]];
+        then
+			sourceSize=$(wc -c "$HOM/source/${obj}" | awk '{print $1}')
+			BackupSize=$(wc -c "${LBackup}/${obj}" | awk '{print $1}')
+			TotalSize=$(echo "${sourceSize} - ${BackupSize}" | bc)
+			if [[ $TotalSize != 0 ]];
+            then
+				mv "$LBackup/$obj" "$LBackup/$obj.$Today"
+				cp "$HOM/source/$obj" $LBackup
+				changes="${changes}\n\t$obj ($obj.$Today)"
+			fi
+		else
+			cp "$HOM/source/$obj" $LBackup
+			changes="${changes}\n\t$obj"
         fi
-    done
+	done
+    changes=$(echo $changes | sed 's/^\\n//')
+    if [[ ! -z "$changes" ]];
+    then
+	    echo -e "${LBackupDate}. Updated:\n${changes}" >> $rep
+	fi
 fi
-
-echo "=== Successfully backup ==="
